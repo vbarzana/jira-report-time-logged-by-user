@@ -59,32 +59,59 @@ function getData($url)
     return $result;
 }
 
-function buildRowFromData($data)
+function buildRowFromData($issues)
 {
     global $error;
 
     //echo json_encode($data); exit;
 
-    if (empty($data)) {
+    if (empty($issues)) {
         $error = 'Error: Request did not return any results, check login information or project key';
         return false;
     }
 
     $arr = [];
-
-    foreach ($data as $i => $issue) {
+    foreach ($issues as $i => $issue) {
         $field = $issue['fields'];
         $arr[$i]['key'] = $issue['key'];
         $arr[$i]['assignee'] = $field['assignee']['displayName'];
         $arr[$i]['status'] = $field['status']['name'];
         $arr[$i]['priority'] = $field['priority']['name'];
-        $arr[$i]['summary'] = $field['summary'];
-        $arr[$i]['time_estimate'] = $field['timeestimate'];
-        //$arr[$i]['total_time_spent'] = $field['aggregatetimespent'];
-        $arr[$i]['total_time_spent'] = $field['timespent'];
+        $arr[$i]['summary'] = getWorklogs($issue['key'], $field['status']['name']);
+        $arr[$i]['total_time_spent'] = ($field['timespent'] / 3600);
     }
 
     return $arr;
+}
+
+function debug($data)
+{
+    echo '<pre>';
+    echo var_dump($data);
+    echo '</pre>';
+    die();
+}
+
+function getWorklogs($key, $status)
+{
+    global $cfg;
+    $statusCls = str_replace(" ", "", strtolower($status));
+    $url = getBaseUrl() . "issue/$key/worklog?jql=" . urlencode("worklogAuthor=" . $cfg['jira_username'] . " AND worklogDate >= " . $cfg['from'] . "AND worklogDate <= " . $cfg['to']);
+    $worklogData = getData($url);
+    $worklogs = json_decode($worklogData, true);
+    $comments = '';
+    foreach ($worklogs['worklogs'] as $i => $worklog) {
+        $date = $date = new DateTime($worklog['started']);
+        $date = $date->format('Y-m-d H:i:s');
+        $comments .= '<div class="entry' . ($i % 2 == 0 ? ' striped' : '') . '"><span class="date ' . $statusCls . '">' . $date . ' (' . $worklog['timeSpent'] . ')</span><span class="description">' . $worklog['comment'] . '</span></div>';
+    }
+    return $comments;
+}
+
+function getBaseUrl()
+{
+    global $cfg;
+    return $cfg['jira_host_address'] . "/rest/api/2/";
 }
 
 function getIssuesUrl()
@@ -97,18 +124,28 @@ function getIssuesUrl()
 
     $jiraKey = strtoupper($jiraKey);
     // load url
-    $jql = urlencode("project=" . $jiraKey . " AND worklogAuthor=" . $cfg['jira_username'] . " AND worklogDate >= " . $cfg['from'] . "AND worklogDate <= " . $cfg['to'] . "&maxResults=" . $cfg['max_results']);
-    return $cfg['jira_host_address'] . "/rest/api/2/search?jql=" . $jql;
+    $jql = urlencode("project=" . $jiraKey . " AND worklogAuthor=" . $cfg['jira_username'] . " AND worklogDate >= " . $cfg['from'] . "AND worklogDate <= " . $cfg['to']);
+    return getBaseUrl() . "search?jql=" . $jql . "&maxResults=" . $cfg['max_results'];
 }
 
 if (!empty($_POST)) {
     if ($_POST["submit"] === "fetch") {
         $url = getIssuesUrl();
+
         $result = getData($url);
-
         $decodedData = json_decode($result, true);
+        $issues = $decodedData['issues'];
+        $rows = buildRowFromData($issues);
+        $total = 0;
+        foreach ($rows as &$row) {
+            $total += $row['total_time_spent'];
+            $row['total_time_spent'] = $row['total_time_spent'] . ' h';
+        }
+        $totalRow = array();
+        $totalRow['key'] = '<b>TOTAL: </b>';
+        $totalRow['total_time_spent'] = '<b>' . $total . ' h</b>';
 
-        $rows = buildRowFromData($decodedData['issues']);
+        array_push($rows, $totalRow);
 
         $_SESSION['export'] = $rows;
     } else if ($_POST["submit"] === "export") {
@@ -132,9 +169,55 @@ if (!empty($_POST)) {
     <title>JIRA Export</title>
     <link rel="stylesheet" href="https://unpkg.com/purecss@0.6.2/build/pure-min.css"
           integrity="sha384-UQiGfs9ICog+LwheBSRCt1o5cbyKIHbwjWscjemyBMT9YCUMZffs6UqUTd0hObXD" crossorigin="anonymous">
-    <style>body {
+    <style>
+        body {
             font-family: Arial;
             padding: 30px
+        }
+
+        .entry {
+            margin: 0 0 5px 0;
+            float: left;
+            width: 100%;
+            -webkit-border-radius: 3px;
+            -moz-border-radius: 3px;
+            border-radius: 3px;
+        }
+
+        .entry span {
+            float: left;
+            margin-left: 5px;
+        }
+
+        .entry.striped {
+            background-color: rgba(240, 248, 255, 0.41);
+        }
+
+        span.date {
+            color: #594300;
+            background-color: #d3efff;
+            border: 1px solid #d4d4d4;
+            padding: 3px 5px 2px 5px;
+            min-width: 76px;
+            border-radius: 3px;
+            display: inline-block;
+            font-size: 11px;
+            line-height: 99%;
+            margin: 0;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        span.date.inprogress {
+            background-color: #fbff5d;
+        }
+
+        span.description {
+            font-style: italic;
+            float: none;
+            width: auto;
+            font-size: 12px;
+            clear: left;
         }
 
         label {
@@ -176,7 +259,8 @@ if (!empty($_POST)) {
 
         .button-xlarge {
             font-size: 125%
-        }</style>
+        }
+    </style>
 </head>
 <body>
 <?php if (!empty($error)) : ?>
@@ -204,20 +288,18 @@ if (!empty($_POST)) {
             <th>Status</th>
             <th>Priority</th>
             <th>Summary</th>
-            <th>Time Estimated</th>
             <th>Total Time Spent</th>
         </tr>
         </thead>
         <tbody>
         <?php foreach ($rows as $index => $row) : ?>
             <tr>
-                <td><?php echo $row['key']; ?></td>
-                <td><?php echo $row['assignee']; ?></td>
-                <td><?php echo $row['status']; ?></td>
-                <td><?php echo $row['priority']; ?></td>
-                <td><?php echo $row['summary']; ?></td>
-                <td><?php echo $row['time_estimate']; ?></td>
-                <td><?php echo $row['total_time_spent']; ?></td>
+                <td><?= @$row['key']; ?></td>
+                <td><?= @$row['assignee']; ?></td>
+                <td><?= @$row['status']; ?></td>
+                <td><?= @$row['priority']; ?></td>
+                <td><?= @$row['summary']; ?></td>
+                <td><?= @$row['total_time_spent']; ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>
