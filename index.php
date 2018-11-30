@@ -1,55 +1,60 @@
 <?php
 
 /**
- * Update these configuration variables to  match your own JIRA settings.
- *
- * Refer to README.md for more information.
- */
-$cfg = [
-    'jira_username' => 'victor.barzana',
-    'jira_host_address' => 'https://typisch-touristik.atlassian.net',
-    'jira_user_email' => 'victor.barzana@typisch-touristik.de',
-    'jira_user_password' => 'M4r14Lu154T34m0Much0M456',
-    'max_results' => '500',
-    'from' => 'startOfMonth()',
-    'to' => 'endOfMonth()',
-    'project_key' => 'TYTO'
-];
-
-/**
  * Local Composer
  */
 require 'vendor/autoload.php';
 
 use League\Csv\Writer;
 
-session_start();
-
+$cfg = "";
 $error = "";
+
+session_start();
+initConfig();
+
+function initConfig()
+{
+    global $cfg;
+    // Let's read the config and override the default config.json if we find a config.local.json
+    $defaultConfig = '';
+    $userConfig = '';
+    if (file_exists("./config.json")) {
+        $defaultConfig = file_get_contents("./config.json");
+    }
+    if (file_exists("./config.local.json")) {
+        $userConfig = file_get_contents("./config.local.json");
+    }
+    if ($defaultConfig && $userConfig) {
+        $cfg = array_merge(json_decode($defaultConfig, true), json_decode($userConfig, true));
+    } else {
+        $cfg = json_decode(($userConfig ? $userConfig : $defaultConfig), true);
+    }
+}
 
 function getData($url)
 {
     global $cfg;
     global $error;
 
-    $ch = curl_init();
+    $curl = curl_init();
 
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "GET");
+    curl_setopt($curl, CURLOPT_URL, $url);
+    curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "GET");
 
     $headers = array();
     $headers[] = "Authorization: Basic " . base64_encode($cfg['jira_user_email'] . ':' . $cfg['jira_user_password']);
     $headers[] = "Content-Type: application/json";
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
 
-    $result = curl_exec($ch);
+    $result = curl_exec($curl);
 
-    if (curl_errno($ch)) {
-        $error = 'Error: ' . curl_error($ch);
+    if (curl_errno($curl)) {
+        $error = 'Error: ' . curl_error($curl);
     }
-    curl_close($ch);
+    curl_close($curl);
 
     return $result;
 }
@@ -82,18 +87,24 @@ function buildRowFromData($data)
     return $arr;
 }
 
-if (!empty($_POST)) :
-    if ($_POST["submit"] === "fetch") {
-        $jiraKey = $_POST["jira_key"];
-        if (!$jiraKey) {
-            $jiraKey = $cfg['project_key'];
-        }
+function getIssuesUrl()
+{
+    global $cfg;
+    $jiraKey = $_POST["jira_key"];
+    if (!$jiraKey) {
+        $jiraKey = $cfg['project_key'];
+    }
 
-        $jiraKey = strtoupper($jiraKey);
-        // load url
-        $jql = urlencode("project=" . $jiraKey . " AND worklogAuthor=" . $cfg['jira_username'] . " AND worklogDate >= " . $cfg['from'] . "AND worklogDate <= " . $cfg['to'] . "&maxResults=" . $cfg['max_results']);
-        $url = $cfg['jira_host_address'] . "/rest/api/2/search?jql=" . $jql;
-        $result = getData($jiraKey);
+    $jiraKey = strtoupper($jiraKey);
+    // load url
+    $jql = urlencode("project=" . $jiraKey . " AND worklogAuthor=" . $cfg['jira_username'] . " AND worklogDate >= " . $cfg['from'] . "AND worklogDate <= " . $cfg['to'] . "&maxResults=" . $cfg['max_results']);
+    return $cfg['jira_host_address'] . "/rest/api/2/search?jql=" . $jql;
+}
+
+if (!empty($_POST)) {
+    if ($_POST["submit"] === "fetch") {
+        $url = getIssuesUrl();
+        $result = getData($url);
 
         $decodedData = json_decode($result, true);
 
@@ -112,7 +123,8 @@ if (!empty($_POST)) :
 
         $writer->output('jira-export-' . $time . '.csv');
     }
-endif; ?>
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
