@@ -1,4 +1,14 @@
 # jira-report-time-logged-by-user
+#### My contribution
+This is a fork I have created from the original repository from [fyllepo](https://github.com/fyllepo/jira-report-time-logged-by-user).
+Here for personal usage I have added a few enhancements like: 
+* Extended Jira Query Language.
+* Use of Bootstrap for responsive design.
+* Total hours calculation.
+* Working hours are shown by worklogs rather than by task hours.
+* The total of hours is calculated based on the total of the time logged in every work log.
+
+From now on follows the original documentation:
 This is quick solution to JIRA not having an out the box way of reporting time logged per user, instead of just a project. This can be a bit of a road block for project managers. This was never intended to be 100% polished, as it was made quickly and I don't intend on updating this repo unless there is genuine interest, you're welcome to do what you want with it.
 
 #### Requirements
