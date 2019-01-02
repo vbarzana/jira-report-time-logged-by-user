@@ -30,6 +30,29 @@ function initConfig()
     } else {
         $cfg = json_decode(($userConfig ? $userConfig : $defaultConfig), true);
     }
+    $cfg['fromDate'] = parseDate($cfg['from']);
+    $cfg['toDate'] = parseDate($cfg['to']);
+    $cfg['from'] = str_replace('/', '\u002f', $cfg['from']);
+    $cfg['to'] = str_replace('/', '\u002f', $cfg['to']);
+}
+
+function parseDate($jiraDate)
+{
+    $newDate = null;
+    $offset = $jiraDate;
+    $offset = str_replace('startOfMonth(', '', $offset);
+    $offset = str_replace('endOfMonth(', '', $offset);
+    $offset = (int)str_replace(')', '', $offset);
+    if (empty($offset)) {
+        $offset = 0;
+    }
+    // If is start of month check the index
+    if (strpos($jiraDate, 'startOfMonth') > -1) {
+        $newDate = date_create(date("Y/m/01", strtotime($offset . " months")));
+    } else if (strpos($jiraDate, 'endOfMonth') > -1) {
+        $newDate = date_create(date("Y/m/t", strtotime($offset . " months")));
+    }
+    return $newDate;
 }
 
 function getData($url)
@@ -78,8 +101,8 @@ function buildRowFromData($issues)
         $arr[$i]['assignee'] = $field['assignee']['displayName'];
         $arr[$i]['status'] = $field['status']['name'];
         $arr[$i]['priority'] = $field['priority']['name'];
-        $arr[$i]['summary'] = '<strong style="font-size: 12px;">' . $field['summary'] . '</strong><br/>' . $worklogs;
-        $arr[$i]['total_time_spent'] = ($field['timespent'] / 3600);
+        $arr[$i]['summary'] = '<strong style="font-size: 12px;">' . $field['summary'] . '</strong><br/>' . $worklogs[1];
+        $arr[$i]['total_time_spent'] = $worklogs[0] / 3600; //($field['timespent'] / 3600);
     }
     return $arr;
 }
@@ -101,13 +124,19 @@ function getWorklogs($key, $status)
     $worklogData = getData($url);
     $worklogs = json_decode($worklogData, true);
     $comments = '';
+    $totalTime = 0;
     foreach ($worklogs['worklogs'] as $i => $worklog) {
         $date = $date = new DateTime($worklog['started']);
-        $date = $date->format('Y-m-d H:i:s');
-        $comment = str_replace('\n', '<br/>', $worklog['comment']);
-        $comments .= '<div class="entry' . ($i % 2 == 0 ? ' striped' : '') . '"><span class="date ' . $statusCls . '">' . $date . ' (' . $worklog['timeSpent'] . ')</span><span class="description">' . $comment . '</span></div>';
+        // if(worklogdate is between from and to, take it, otherwise ignore)
+        if ($date >= $cfg['fromDate'] && $date <= $cfg['toDate']) {
+            $totalTime += ((int)$worklog['timeSpentSeconds']);
+            $date = $date->format('Y-m-d H:i:s');
+            $comment = str_replace('\n', '<br/>', $worklog['comment']);
+            $comments .= '<div class="entry' . ($i % 2 == 0 ? ' striped' : '') . '"><span class="date ' . $statusCls . '">' . $date . ' (' . $worklog['timeSpent'] . ')</span><span class="description">' . $comment . '</span></div>';
+        }
     }
-    return $comments;
+
+    return array($totalTime, $comments);
 }
 
 function getApiBaseUrl()
@@ -132,7 +161,7 @@ function getApiIssuesUrl()
 
     $jiraKey = strtoupper($jiraKey);
     // load url
-    $jql = urlencode("project=" . $jiraKey . " AND worklogAuthor=" . $cfg['jira_username'] . " AND worklogDate >= " . $cfg['from'] . "AND worklogDate <= " . $cfg['to']);
+    $jql = urlencode("project=" . $jiraKey . " AND worklogAuthor=" . $cfg['jira_username'] . " AND worklogDate >= " . $cfg['from'] . " AND worklogDate <= " . $cfg['to']);
     return getApiBaseUrl() . "search?jql=" . $jql . "&maxResults=" . $cfg['max_results'];
 }
 
@@ -152,7 +181,6 @@ if (!empty($_POST)) {
         $totalRow['key'] = '<b>TOTAL: </b>';
         $totalRow['total_row'] = true;
         $totalRow['total_time_spent'] = $total;
-
         array_push($rows, $totalRow);
 
         $_SESSION['export'] = $rows;
