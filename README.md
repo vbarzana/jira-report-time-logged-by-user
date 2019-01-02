@@ -14,7 +14,7 @@ This is quick solution to JIRA not having an out the box way of reporting time l
 1.  Enter a project key,  JIRA creates this when starting a new project.
 2.  Click run report, if all went well and there are no errors you can proceed to export this as CSV format.
 
-![Uploading new screenshot.jpg]()
+![Uploading new screenshot.jpg](https://user-images.githubusercontent.com/3055285/50592194-bfacbf80-0e9b-11e9-9811-f70c2cbcaeec.png)
 
 #### What it does
 This tool uses the JIRA REST API, however it requires your user email and password for basic authentication, and this user would require permissions to view the project and obtain the data requested - so please be mindful of this fact.
