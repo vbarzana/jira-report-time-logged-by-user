@@ -42,7 +42,7 @@ function parseDate($jiraDate)
     $offset = $jiraDate;
     $offset = str_replace('startOfMonth(', '', $offset);
     $offset = str_replace('endOfMonth(', '', $offset);
-    $offset = (int)str_replace(')', '', $offset);
+    $offset = @(int)str_replace(')', '', $offset);
     if (empty($offset)) {
         $offset = 0;
     }
@@ -51,6 +51,8 @@ function parseDate($jiraDate)
         $newDate = date_create(date("Y/m/01", strtotime($offset . " months")));
     } else if (strpos($jiraDate, 'endOfMonth') > -1) {
         $newDate = date_create(date("Y/m/t", strtotime($offset . " months")));
+    } else {
+        $newDate = @date_create($jiraDate);
     }
     return $newDate;
 }
