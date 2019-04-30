@@ -69,7 +69,7 @@ function getData($url)
     curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "GET");
 
     $headers = array();
-    $headers[] = "Authorization: Basic " . base64_encode($cfg['jira_user_email'] . ':' . $cfg['jira_user_password']);
+    $headers[] = "Authorization: Basic " . base64_encode($cfg['jira_user_email'] . ':' . ($cfg['jira_api_token'] ?: $cfg['jira_user_password']));
     $headers[] = "Content-Type: application/json";
     curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
     curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
@@ -122,7 +122,7 @@ function getWorklogs($key, $status)
     global $cfg;
 
     $statusCls = str_replace(" ", "", strtolower($status));
-    $url = getApiBaseUrl() . "issue/$key/worklog?jql=" . urlencode("worklogAuthor=" . $cfg['jira_username'] . " AND worklogDate >= " . $cfg['from'] . "AND worklogDate <= " . $cfg['to']);
+    $url = getApiBaseUrl() . "issue/$key/worklog?jql=" . urlencode("worklogAuthor=currentUser() AND worklogDate >= " . $cfg['from'] . "AND worklogDate <= " . $cfg['to']);
     $worklogData = getData($url);
     $worklogs = json_decode($worklogData, true);
     $comments = '';
@@ -163,7 +163,7 @@ function getApiIssuesUrl()
 
     $jiraKey = strtoupper($jiraKey);
     // load url
-    $jql = urlencode("project=" . $jiraKey . " AND worklogAuthor=" . $cfg['jira_username'] . " AND worklogDate >= " . $cfg['from'] . " AND worklogDate <= " . $cfg['to']);
+    $jql = urlencode("project=" . $jiraKey . " AND worklogAuthor=currentUser() AND worklogDate >= " . $cfg['from'] . " AND worklogDate <= " . $cfg['to']);
     return getApiBaseUrl() . "search?jql=" . $jql . "&maxResults=" . $cfg['max_results'];
 }
 

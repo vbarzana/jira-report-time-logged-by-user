@@ -3,6 +3,7 @@
   "jira_host_address": "https://your.atlassian.net",
   "jira_user_email": "support@admin.com",
   "jira_user_password": "t0p53cr3t!",
+  "jira_api_token": "",
   "max_results": "500",
   "from": "startOfMonth()",
   "to": "endOfMonth()",
